@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"ai-code-reviewer/internal/ai"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/worker"
 )
@@ -29,11 +30,17 @@ func (s *Server) routes() {
 		adapter,
 	)
 
+	aiProvider := ai.NewOpenAI(
+		s.cfg.OpenAIKey,
+		s.cfg.OpenAIModel,
+	)
+
 	// background processor
 	processor := worker.NewProcessor(
 		memQueue,
 		ghClient,
 		s.logger,
+		aiProvider,
 	)
 
 	mux.HandleFunc("/webhook/github", gh.Handle)

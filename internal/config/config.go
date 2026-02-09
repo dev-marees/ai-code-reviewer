@@ -14,14 +14,21 @@ type Config struct {
 	GithubPrivateKeyPath string
 	GithubAppID          string
 	GithubInstallationID string
+	OpenAIKey            string
+	OpenAIModel          string
 }
 
 func Load() *Config {
 	return &Config{
-		Port:         getEnv("PORT", "8080"),
-		Env:          getEnv("ENV", "local"),
-		GithubSecret: getEnv("GITHUB_WEBHOOK_SECRET", ""),
-		LogLevel:     getEnv("LOG_LEVEL", "debug"),
+		Port:                 getEnv("PORT", "8080"),
+		Env:                  getEnv("ENV", "local"),
+		GithubSecret:         getEnv("GITHUB_WEBHOOK_SECRET", ""),
+		LogLevel:             getEnv("LOG_LEVEL", "debug"),
+		GithubPrivateKeyPath: getEnv("GITHUB_APP_PRIVATE_KEY_PATH", ""),
+		GithubAppID:          getEnv("GITHUB_APP_ID", ""),
+		GithubInstallationID: getEnv("GITHUB_APP_INSTALLATION_ID", ""),
+		OpenAIKey:            getEnv("OPENAI_KEY", ""),
+		OpenAIModel:          getEnv("OPENAI_MODEL", "gpt-3.5-turbo"),
 	}
 }
 

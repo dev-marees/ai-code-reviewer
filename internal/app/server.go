@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"ai-code-reviewer/internal/ai"
 	"ai-code-reviewer/internal/config"
 	"ai-code-reviewer/internal/observability"
 )
@@ -13,6 +14,7 @@ import (
 type Server struct {
 	cfg    *config.Config
 	logger *observability.Logger
+	openAI *ai.OpenAI
 	http   *http.Server
 }
 
@@ -23,6 +25,10 @@ func NewServer(cfg *config.Config, logger *observability.Logger) *Server {
 	s := &Server{
 		cfg:    cfg,
 		logger: logger,
+		openAI: ai.NewOpenAI(
+			cfg.OpenAIKey,
+			cfg.OpenAIModel,
+		),
 	}
 
 	s.routes()
