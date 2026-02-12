@@ -7,7 +7,11 @@ import (
 	"ai-code-reviewer/internal/ai"
 	"ai-code-reviewer/internal/dedup"
 	"ai-code-reviewer/internal/github"
+	"ai-code-reviewer/internal/observability"
+	"ai-code-reviewer/internal/ratelimit"
 	"ai-code-reviewer/internal/worker"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func (s *Server) routes() {
@@ -43,6 +47,9 @@ func (s *Server) routes() {
 
 	dedup := dedup.NewMemory()
 
+	//ratelimiter
+	rateLimiter := ratelimit.New(s.cfg.RateLimitRPS, s.cfg.RateLimitBurst)
+
 	// background processor
 	processor := worker.NewProcessor(
 		queue,
@@ -51,9 +58,14 @@ func (s *Server) routes() {
 		dedup,
 		s.logger,
 		fallback,
+		rateLimiter,
 	)
 
+	// init metrics
+	observability.InitMetrics()
+
 	mux.HandleFunc("/webhook/github", gh.Handle)
+	mux.Handle("/metrics", promhttp.Handler())
 
 	processor.Start(context.Background())
 

@@ -22,6 +22,8 @@ type Config struct {
 	QueueType            string
 	OllamaURL            string
 	OllamaModel          string
+	RateLimitRPS         int
+	RateLimitBurst       int
 }
 
 func Load() *Config {

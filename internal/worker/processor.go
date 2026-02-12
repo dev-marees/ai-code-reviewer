@@ -13,18 +13,20 @@ import (
 	"ai-code-reviewer/internal/diff"
 	"ai-code-reviewer/internal/github"
 	"ai-code-reviewer/internal/observability"
+	"ai-code-reviewer/internal/ratelimit"
 	"ai-code-reviewer/internal/retry"
 	"ai-code-reviewer/internal/review"
 )
 
 type Processor struct {
-	queue    Queue
-	client   github.Client
-	comments github.CommentClient
-	dedup    dedup.Store
-	logger   *observability.Logger
-	chunker  *chunker.Chunker
-	ai       ai.Provider
+	queue       Queue
+	client      github.Client
+	comments    github.CommentClient
+	dedup       dedup.Store
+	logger      *observability.Logger
+	chunker     *chunker.Chunker
+	ai          ai.Provider
+	rateLimiter *ratelimit.Limiter
 }
 
 func NewProcessor(
@@ -34,16 +36,18 @@ func NewProcessor(
 	d dedup.Store,
 	l *observability.Logger,
 	a ai.Provider,
+	rl *ratelimit.Limiter,
 ) *Processor {
 
 	return &Processor{
-		queue:    q,
-		client:   c,
-		comments: comments,
-		dedup:    d,
-		logger:   l,
-		chunker:  chunker.New(3000),
-		ai:       a,
+		queue:       q,
+		client:      c,
+		comments:    comments,
+		dedup:       d,
+		logger:      l,
+		chunker:     chunker.New(3000),
+		ai:          a,
+		rateLimiter: rl,
 	}
 }
 
@@ -75,6 +79,8 @@ func (p *Processor) handle(j Job) {
 		return
 	}
 
+	limiter := p.rateLimiter.Get(j.Repo)
+
 	for _, f := range files {
 
 		parsed, _ := diff.Parse(f.Patch)
@@ -87,13 +93,30 @@ func (p *Processor) handle(j Job) {
 
 			for _, ch := range chunks {
 
+				err := limiter.Wait(ctx)
+				if err != nil {
+					p.logger.Error("rate limiter error", "err", err)
+					return
+				}
+
+				startTime := time.Now()
+
 				reviewText, err :=
 					p.ai.Review(ctx, ai.ReviewRequest{
 						File:    ch.File,
 						Content: ch.Content,
 					})
 
+				duration := time.Since(startTime).Seconds()
+
+				//Later we can make this as dynamic
+				provider := "primary"
+
+				observability.AICalls.WithLabelValues(provider).Inc()
+				observability.AILatency.WithLabelValues(provider).Observe(duration)
+
 				if err != nil {
+					observability.AIErrors.WithLabelValues(provider).Inc()
 					p.logger.Error("ai failed", "err", err)
 					continue
 				}
