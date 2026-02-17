@@ -41,9 +41,19 @@ func (s *Server) routes() {
 		s.cfg.GitHubToken,
 	)
 
-	primary := ai.NewProvider(s.cfg)
+	provider := ai.NewProvider(s.cfg)
 
-	fallback := ai.NewFallback(primary, ai.NewOpenAI(s.cfg.OpenAIKey, s.cfg.OpenAIModel))
+	// add circuit breaker
+	providerWithCB := ai.NewCircuitBreaker(provider)
+
+	// optional fallback still works
+	fallback := ai.NewFallback(
+		providerWithCB,
+		ai.NewOllama(
+			s.cfg.OllamaURL,
+			s.cfg.OllamaModel,
+		),
+	)
 
 	dedup := dedup.NewMemory()
 

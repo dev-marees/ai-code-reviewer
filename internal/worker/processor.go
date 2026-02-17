@@ -121,16 +121,22 @@ func (p *Processor) handle(j Job) {
 					continue
 				}
 
-				issues := review.ExtractIssues(reviewText)
+				result, err := review.ParseResult(reviewText)
+				if err != nil {
+					p.logger.Error("invalid ai json",
+						"err", err,
+					)
+					continue
+				}
 
-				for _, is := range issues {
+				for _, is := range result.Issues {
 
 					// Create unique key
 					key := fmt.Sprintf(
 						"%s:%d:%s",
 						ch.File,
 						is.Line,
-						hash(is.Text),
+						hash(is.Severity+is.Title+is.Suggestion),
 					)
 
 					// Dedup check
@@ -139,7 +145,7 @@ func (p *Processor) handle(j Job) {
 					}
 
 					comment := github.LineComment{
-						Body: is.Text,
+						Body: is.Suggestion,
 						Path: ch.File,
 						Line: is.Line,
 						Side: "RIGHT",

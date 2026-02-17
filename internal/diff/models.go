@@ -25,3 +25,4 @@ const (
 	Removed LineType = "removed"
 	Context LineType = "context"
 )
+

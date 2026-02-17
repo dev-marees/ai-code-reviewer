@@ -1,11 +1,12 @@
 module ai-code-reviewer
 
-go 1.26.0
+go 1.24.0
 
 require (
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.17.3
+	github.com/sony/gobreaker v1.0.0
 	golang.org/x/time v0.14.0
 )
 
