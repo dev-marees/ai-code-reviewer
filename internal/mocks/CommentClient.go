@@ -22,6 +22,55 @@ func (_m *CommentClient) EXPECT() *CommentClient_Expecter {
 	return &CommentClient_Expecter{mock: &_m.Mock}
 }
 
+// CreateComment provides a mock function with given fields: ctx, repo, pr, body
+func (_m *CommentClient) CreateComment(ctx context.Context, repo string, pr int, body string) error {
+	ret := _m.Called(ctx, repo, pr, body)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateComment")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, int, string) error); ok {
+		r0 = rf(ctx, repo, pr, body)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// CommentClient_CreateComment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateComment'
+type CommentClient_CreateComment_Call struct {
+	*mock.Call
+}
+
+// CreateComment is a helper method to define mock.On call
+//   - ctx context.Context
+//   - repo string
+//   - pr int
+//   - body string
+func (_e *CommentClient_Expecter) CreateComment(ctx interface{}, repo interface{}, pr interface{}, body interface{}) *CommentClient_CreateComment_Call {
+	return &CommentClient_CreateComment_Call{Call: _e.mock.On("CreateComment", ctx, repo, pr, body)}
+}
+
+func (_c *CommentClient_CreateComment_Call) Run(run func(ctx context.Context, repo string, pr int, body string)) *CommentClient_CreateComment_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string), args[2].(int), args[3].(string))
+	})
+	return _c
+}
+
+func (_c *CommentClient_CreateComment_Call) Return(_a0 error) *CommentClient_CreateComment_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *CommentClient_CreateComment_Call) RunAndReturn(run func(context.Context, string, int, string) error) *CommentClient_CreateComment_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateLineComment provides a mock function with given fields: ctx, repo, pr, comment
 func (_m *CommentClient) CreateLineComment(ctx context.Context, repo string, pr int, comment github.LineComment) error {
 	ret := _m.Called(ctx, repo, pr, comment)

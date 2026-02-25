@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"ai-code-reviewer/internal/ai"
@@ -28,6 +29,12 @@ type Processor struct {
 	chunker     *chunker.Chunker
 	ai          ai.Provider
 	rateLimiter *ratelimit.Limiter
+}
+
+type reviewSummary struct {
+	TotalIssues      int
+	PostedComments   int
+	SeverityCounters map[string]int
 }
 
 func NewProcessor(
@@ -84,6 +91,14 @@ func (p *Processor) handle(parent context.Context, j Job) {
 	}
 
 	limiter := p.rateLimiter.Get(j.Repo)
+	summary := reviewSummary{
+		SeverityCounters: map[string]int{
+			"critical": 0,
+			"high":     0,
+			"medium":   0,
+			"low":      0,
+		},
+	}
 
 	for _, f := range files {
 
@@ -138,6 +153,13 @@ func (p *Processor) handle(parent context.Context, j Job) {
 				}
 
 				for _, is := range result.Issues {
+					summary.TotalIssues++
+
+					sev := strings.ToLower(strings.TrimSpace(is.Severity))
+					if sev == "" {
+						sev = "medium"
+					}
+					summary.SeverityCounters[sev]++
 
 					// Create unique key
 					key := fmt.Sprintf(
@@ -174,6 +196,7 @@ func (p *Processor) handle(parent context.Context, j Job) {
 
 					// mark as posted
 					p.dedup.Mark(ctx, key)
+					summary.PostedComments++
 				}
 
 				p.logger.Info("AI REVIEW",
@@ -183,9 +206,42 @@ func (p *Processor) handle(parent context.Context, j Job) {
 			}
 		}
 	}
+
+	body := formatSummaryComment(summary)
+	if body == "" {
+		return
+	}
+
+	if err := retry.Do(ctx, 3, time.Second, func() error {
+		return p.comments.CreateComment(ctx, j.Repo, j.PR, body)
+	}); err != nil {
+		p.logger.Error("summary comment failed", "err", err)
+	}
 }
 
 func hash(s string) string {
 	h := sha1.Sum([]byte(s))
 	return hex.EncodeToString(h[:])
+}
+
+func formatSummaryComment(s reviewSummary) string {
+	if s.TotalIssues == 0 {
+		return "## AI Review Summary\n\nNo issues detected in the analyzed diff."
+	}
+
+	return fmt.Sprintf(
+		"## AI Review Summary\n\n"+
+			"- Total issues found: %d\n"+
+			"- Line comments posted: %d\n"+
+			"- Critical: %d\n"+
+			"- High: %d\n"+
+			"- Medium: %d\n"+
+			"- Low: %d",
+		s.TotalIssues,
+		s.PostedComments,
+		s.SeverityCounters["critical"],
+		s.SeverityCounters["high"],
+		s.SeverityCounters["medium"],
+		s.SeverityCounters["low"],
+	)
 }
