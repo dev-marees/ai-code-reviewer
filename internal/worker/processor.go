@@ -40,8 +40,10 @@ const (
 	githubCommentSide   = "RIGHT"
 	defaultAIProvider   = "primary"
 	defaultSeverity     = "medium"
-	retryAttempts       = 3
-	retryBackoff        = time.Second
+	commentRetryAttempts = 3
+	commentRetryBackoff  = time.Second
+	aiRetryAttempts      = 3
+	aiRetryBackoff       = 500 * time.Millisecond
 	summaryTitle        = "## AI Review Summary"
 	noIssuesSummaryText = "No issues detected in the analyzed diff."
 	budgetStoppedPrefix = "Budget guard triggered"
@@ -154,8 +156,7 @@ processing:
 
 				startTime := time.Now()
 
-				reviewResp, err :=
-					p.ai.Review(ctx, ai.ReviewRequest{
+				reviewResp, err := p.reviewWithRetry(ctx, ai.ReviewRequest{
 						File:    ch.File,
 						Content: ch.Content,
 					})
@@ -232,7 +233,7 @@ processing:
 						Side: githubCommentSide,
 					}
 
-					err = retry.Do(ctx, retryAttempts, retryBackoff, func() error {
+					err = retry.Do(ctx, commentRetryAttempts, commentRetryBackoff, func() error {
 						return p.comments.CreateLineComment(
 							ctx, j.Repo, j.PR, comment,
 						)
@@ -264,11 +265,21 @@ processing:
 		return
 	}
 
-	if err := retry.Do(ctx, retryAttempts, retryBackoff, func() error {
+	if err := retry.Do(ctx, commentRetryAttempts, commentRetryBackoff, func() error {
 		return p.comments.CreateComment(ctx, j.Repo, j.PR, body)
 	}); err != nil {
 		p.logger.Error("summary comment failed", "err", err)
 	}
+}
+
+func (p *Processor) reviewWithRetry(ctx context.Context, req ai.ReviewRequest) (ai.ReviewResponse, error) {
+	var resp ai.ReviewResponse
+	err := retry.Do(ctx, aiRetryAttempts, aiRetryBackoff, func() error {
+		var err error
+		resp, err = p.ai.Review(ctx, req)
+		return err
+	})
+	return resp, err
 }
 
 func hash(s string) string {

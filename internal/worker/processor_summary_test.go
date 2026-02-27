@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -181,4 +182,67 @@ func TestProcessorHandle_StopsWhenBudgetExceeded(t *testing.T) {
 	)
 
 	p.handle(context.Background(), Job{Repo: "acme/repo", PR: 9})
+}
+
+func TestProcessorHandle_RetriesAIReviewThenSucceeds(t *testing.T) {
+	provider := mocks.NewProvider(t)
+	comments := mocks.NewCommentClient(t)
+	client := &clientStub{
+		files: []github.PRFile{
+			{
+				Filename: "main.go",
+				Patch: "diff --git a/main.go b/main.go\n" +
+					"--- a/main.go\n" +
+					"+++ b/main.go\n" +
+					"@@ -1,1 +1,2 @@\n" +
+					"-old\n" +
+					"+new\n",
+			},
+		},
+	}
+
+	provider.
+		EXPECT().
+		Review(mock.Anything, mock.Anything).
+		Return(ai.ReviewResponse{}, errors.New("temporary provider error")).
+		Once()
+
+	provider.
+		EXPECT().
+		Review(mock.Anything, mock.Anything).
+		Return(
+			ai.ReviewResponse{
+				Content:  `{"issues":[]}`,
+				Provider: "openai",
+				Model:    "gpt-4o-mini",
+				Usage: ai.Usage{
+					PromptTokens:     40,
+					CompletionTokens: 10,
+					TotalTokens:      50,
+				},
+			},
+			nil,
+		).
+		Once()
+
+	comments.
+		EXPECT().
+		CreateComment(mock.Anything, "acme/repo", 10, mock.MatchedBy(func(body string) bool {
+			return strings.Contains(body, "No issues detected")
+		})).
+		Return(nil).
+		Once()
+
+	p := NewProcessor(
+		NewMemoryQueue(1),
+		client,
+		comments,
+		dedup.NewMemory(),
+		observability.NewLogger(&config.Config{LogLevel: "info"}),
+		provider,
+		ratelimit.New(100, 100),
+		nil,
+	)
+
+	p.handle(context.Background(), Job{Repo: "acme/repo", PR: 10})
 }
